@@ -22,7 +22,7 @@ module ActionView
         end
 
         state_options += options_for_select(US_STATES.collect(&states_label), selected)
-        state_options
+        state_options.html_safe
       end
 
       def us_state_select(object, method, us_state_options = {}, options = {}, html_options = {})
