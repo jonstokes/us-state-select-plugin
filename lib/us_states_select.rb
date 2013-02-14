@@ -1,33 +1,70 @@
 module ActionView
   module Helpers
     module FormOptionsHelper
-      def us_state_options_for_select(selected = nil, options = {})
+
+      def canada_options_for_select(selected = nil, canada_options = {})
         state_options      = ""
-        priority_states    = lambda { |state| options[:priority].include?(state.last) }
-        options[:show] = :full if options[:with_abbreviation]
-        states_label = case options[:show]
-          when :full_abb          then lambda { |state| [state.first, state.last] }
-          when :full              then lambda { |state| [state.first, state.first] }
-          when :abbreviations     then lambda { |state| [state.last, state.last] }
-          when :abb_full_abb      then lambda { |state| ["#{state.last} - #{state.first}", state.last] }
-          else                         lambda { |state| state }
+        priority_states    = lambda { |state| canada_options[:priority].include?(state.last) }
+        canada_options[:show] = :full if canada_options[:with_abbreviation]
+        states_label = case canada_options[:show]
+          when :full          then lambda { |state| ["#{state.last} - #{state.first}", state.last] }
+          when :abbreviations then lambda { |state| [state.last, state.last] }
+          else                     lambda { |state| state }
         end
-        states_label = options[:show] if options[:show].is_a?(Proc)
 
-        if options[:priority]
+        if canada_options[:include_blank]
+          state_options += "<option value=\"\">#{canada_options[:include_blank] if canada_options[:include_blank].kind_of?(String)}</option>\n"
+        end
+
+        if canada_options[:priority]
+          state_options += options_for_select(CANADA.select(&priority_states).collect(&states_label), selected)
+          state_options += "<option value=\"\">--</option>\n"
+        end
+
+        if canada_options[:priority] && canada_options[:priority].include?(selected)
+          state_options += options_for_select(CANADA.reject(&priority_states).collect(&states_label), selected)
+        else
+          state_options += options_for_select(CANADA.collect(&states_label), selected)
+        end
+
+        return state_options.html_safe
+      end
+
+      def canada_select(object, method, canada_options = {}, options = {}, html_options = {})
+        InstanceTag.new(object, method, self, options.delete(:object)).to_canada_select_tag(canada_options, options, html_options)
+      end
+
+
+      def us_state_options_for_select(selected = nil, us_state_options = {})
+        state_options      = ""
+        priority_states    = lambda { |state| us_state_options[:priority].include?(state.last) }
+        us_state_options[:show] = :full if us_state_options[:with_abbreviation]
+        states_label = case us_state_options[:show]
+          when :full          then lambda { |state| ["#{state.last} - #{state.first}", state.last] }
+          when :abbreviations then lambda { |state| [state.last, state.last] }
+          else                     lambda { |state| state }
+        end
+
+        if us_state_options[:include_blank]
+          state_options += "<option value=\"\">#{us_state_options[:include_blank] if us_state_options[:include_blank].kind_of?(String)}</option>\n"
+        end
+
+        if us_state_options[:priority]
           state_options += options_for_select(US_STATES.select(&priority_states).collect(&states_label), selected)
-          state_options += "<option value=\"\" disabled=\"disabled\">-------------</option>\n"
-          
-          selected = nil if options[:priority].include?(selected)
+          state_options += "<option value=\"\">--</option>\n"
         end
 
-        state_options += options_for_select(US_STATES.collect(&states_label), selected)
-        state_options.html_safe
+        if us_state_options[:priority] && us_state_options[:priority].include?(selected)
+          state_options += options_for_select(US_STATES.reject(&priority_states).collect(&states_label), selected)
+        else
+          state_options += options_for_select(US_STATES.collect(&states_label), selected)
+        end
+
+        return state_options.html_safe
       end
 
       def us_state_select(object, method, us_state_options = {}, options = {}, html_options = {})
-        options.merge!(us_state_options)
-        InstanceTag.new(object, method, self, options.delete(:object)).to_us_state_select_tag(options, html_options)
+        InstanceTag.new(object, method, self, options.delete(:object)).to_us_state_select_tag(us_state_options, options, html_options)
       end
 
       private
@@ -43,13 +80,32 @@ module ActionView
                      ["Tennessee", "TN"], ["Texas", "TX"], ["Utah", "UT"], ["Virginia", "VA"], ["Vermont", "VT"], 
                      ["Washington", "WA"], ["Wisconsin", "WI"], ["West Virginia", "WV"], ["Wyoming", "WY"]] unless const_defined?("US_STATES")
 
+        CANADA = [["Ontaria", "ON"], ["Quebec", "QC"], ["British Columbia", "BC"], ["Alberta", "AB"], 
+                     ["Manitoba", "MB"], ["Saskatchewan", "SK"], ["Nova Scotia", "NS"], ["New Brunswick", "NB"], 
+                     ["Newfoundland and Labrador", "LB"], ["Prince Edward Island", "PE"], ["Northwest Territories", "NT"], ["Yukon", "YT"], ["Nunavut", "NU"]] unless const_defined?("CANADA")
     end
 
     class InstanceTag #:nodoc:
-      def to_us_state_select_tag(options, html_options)
+      # lets the us_states plugin handle Rails 1.1.2 AND trunk
+      def value_with_compat(object=nil)
+        if method(:value_without_compat).arity == 1
+          value_without_compat(object)
+        else
+          value_without_compat
+        end
+      end
+      alias_method :value_without_compat, :value
+      alias_method :value, :value_with_compat
+
+      def to_us_state_select_tag(us_state_options, options, html_options)
         html_options = html_options.stringify_keys
         add_default_name_and_id(html_options)
-        content_tag("select", add_options(us_state_options_for_select(value(object), options), options, value(object)), html_options)
+        content_tag("select", add_options(us_state_options_for_select(value(object), us_state_options).html_safe, options, value(object)), html_options)
+      end
+      def to_canada_select_tag(canada_options, options, html_options)
+        html_options = html_options.stringify_keys
+        add_default_name_and_id(html_options)
+        content_tag("select", add_options(canada_options_for_select(value(object), canada_options), options, value(object)), html_options)
       end
     end
     
@@ -57,6 +113,10 @@ module ActionView
       def us_state_select(method, us_state_options = {}, options = {}, html_options = {})
         @template.us_state_select(@object_name, method, us_state_options, options.merge(:object => @object), html_options)
       end
+      def canada_select(method, canada_options = {}, options = {}, html_options = {})
+        @template.canada_select(@object_name, method, canada_options, options.merge(:object => @object), html_options)
+      end
+
     end
   end
 end
